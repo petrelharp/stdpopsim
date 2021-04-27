@@ -31,9 +31,10 @@ class TestGenomeData(test_species.GenomeTestBase):
     mut_rate = 3.5e-9
 
     # these values are given in the text of Pombi et al
-    # except no single value is given for the X
-    # and no value is given for 2L, because of the inversion,
-    # so we set it equal to 2R
+    # except no single value is given for the X; the number
+    # given is the average across chromosome from Pombi's Table 1
+    # No value is given for 2L, because of the inversion,
+    # so we set it equal to 2R.
     @pytest.mark.parametrize(
         ["name", "rate"],
         {
