@@ -1,6 +1,6 @@
 """
 Methods related to traits and effects of mutations on them,
-including fitness (so, this includes DFE machinery).
+including environment and fitness (so, this includes DFE machinery).
 """
 
 import textwrap
@@ -52,7 +52,7 @@ class TraitsModel(object):
     def add_environment(self, *, trait_ids, distribution_type, distribution_args):
         """
         Add random "environmental" (i.e., non-genetic) effects to the specified
-        ``traits``.  See :class:`Environment` more more detail.
+        ``traits``.  See :class:`Environment` for more detail.
         """
         pids = [p.id for p in self.traits]
         for pid in trait_ids:
@@ -64,6 +64,13 @@ class TraitsModel(object):
             distribution_args=distribution_args,
         )
         self.environments.append(env)
+        # TODO: Should we check for existing environments for the specified traits
+        #       or we simply overwrite them?
+        #       I assume we don't want to have multiple environments on top of each other
+        #       affecting the same trait(s).
+        #       Hmm, this could be useful though (to model multiple environmental effects)!
+        #       This needs some thought, particularly with the plan to have time-space
+        #       dependent environments later on.
 
     def check_model_params(self, model, params):
         # Check for consistency with a given demographic model.
@@ -84,21 +91,21 @@ class TraitsModel(object):
 @attr.s(kw_only=True)
 class Trait:
     """
-    Represents a single trait, i.e., something that can be measured.
-    This only defines how the underlying (latent) value,
-    which is a sum of genetic value and environmental deviation,
-    is mapped to the observed value.
+    Represents a single trait, something that we measure or observe.
+    This class defines how the underlying (latent) value,
+    which is a sum of genetic value and environmental deviation(s),
+    is "transformed" to the observed value (the phenotype).
 
     Options for "transform" (link function) are:
 
-    "identity": the trait is equal to the latent value.
+    "identity": the observed value is equal to the latent value.
 
-    "threshold" (parameters: x): the trait is equal to 1 if the latent
-        value is less than x, and is equal to 0 otherwise.
+    "threshold" (parameters: t): the observed value is equal to 1 if the latent
+        value is less than t, and is equal to 0 otherwise.
 
-    "liability" (parameters center, slope): the trait whose
-        latent value is z is equal to 1 with probability
-        1 / (1 + exp((x - center) * slope)), and is equal to 0 otherwise.
+    "liability" (parameters center, slope): the observed value is equal to 1
+        with probability 1 / (1 + exp((x - center) * slope)) for the latent value x,
+        and is equal to 0 otherwise.
 
     TODO: Add "exponential" transform to get log-normal traits?
 
@@ -128,7 +135,7 @@ class Trait:
         elif self.transform == "liability":
             if len(self.params) != 2:
                 raise ValueError(
-                    "threshold transform requires two parameters " "(center and slope)"
+                    "threshold transform requires two parameters (center and slope)"
                 )
         else:
             raise ValueError(f"Transform {self.transform} unknown.")
@@ -233,7 +240,7 @@ def _check_distribution(distribution_type, distribution_args, dim):
         # Fixed-value (non-random)
         if len(distribution_args) != dim:
             raise ValueError(
-                "Fixed-value mutation type argument must be a list of "
+                "Fixed-value argument must be a list of "
                 "length equal to number of traits."
             )
     elif distribution_type == "g":
@@ -243,8 +250,8 @@ def _check_distribution(distribution_type, distribution_args, dim):
         # See Eidos documentation for rgamma().
         if len(distribution_args) != 2:
             raise ValueError(
-                "Gamma-distributed sel. coefs. (distribution_type='g') "
-                "use a (mean, shape) parameterisation."
+                "Gamma distribution (distribution_type='g') "
+                "uses a (mean, shape) parameterisation."
             )
         if distribution_args[1] <= 0:
             raise ValueError("The shape parameter must be positive.")
@@ -253,16 +260,19 @@ def _check_distribution(distribution_type, distribution_args, dim):
         # See Eidos documentation for rexp().
         if len(distribution_args) != 1:
             raise ValueError(
-                "Exponentially-distributed sel. coefs. (distribution_type='e') "
-                "use a (mean) parameterisation."
+                "Exponential distribution (distribution_type='e') "
+                "uses a (mean) parameterisation."
             )
     elif distribution_type == "n":
         # A normal distribution (mean, standard deviation).
+        # TODO: SD for univariate normal, but covariance matrix for multivariate normal?
+        #       I appreciate this comes from SLiM, which follows R's convention!
+        #       How do we warn users about this?
         # See Eidos documentation for rnorm().
         if len(distribution_args) != 2:
             raise ValueError(
-                "Normally-distributed sel. coefs. (distribution_type='n') "
-                "use a (mean, sd) parameterisation."
+                "Normal distribution (distribution_type='n') "
+                "uses a (mean, sd) parameterisation."
             )
         if distribution_args[1] < 0:
             raise ValueError("The sd parameter must be nonnegative.")
@@ -271,8 +281,8 @@ def _check_distribution(distribution_type, distribution_args, dim):
         # See Eidos documentation for rweibull().
         if len(distribution_args) != 2:
             raise ValueError(
-                "Weibull-distributed sel. coef. (distribution_type='w') "
-                "use a (scale, shape) parameterisation."
+                "Weibull distribution (distribution_type='w') "
+                "uses a (scale, shape) parameterisation."
             )
         if distribution_args[0] <= 0:
             raise ValueError("The scale parameter must be positive.")
@@ -284,8 +294,8 @@ def _check_distribution(distribution_type, distribution_args, dim):
         # See Eidos documentation for rlnorm().
         if len(distribution_args) != 2:
             raise ValueError(
-                "Lognormally-distributed sel. coefs. (distribution_type='lp'/'ln') "
-                "use a (meanlog, sdlog) parameterisation, requiring sdlog > 0."
+                "Lognormal distribution (distribution_type='lp'/'ln') "
+                "uses a (meanlog, sdlog) parameterisation, requiring sdlog > 0."
             )
         if distribution_args[1] < 0:
             raise ValueError("The sdlog parameter must be nonnegative.")
@@ -293,16 +303,16 @@ def _check_distribution(distribution_type, distribution_args, dim):
         # Uniform
         if len(distribution_args) != 2 or distribution_args[0] > distribution_args[1]:
             raise ValueError(
-                "Uniformly-distributed sel. coefs. (distribution_type='u') "
-                "use a (min, max) parameterisation, with min <= max."
+                "Uniform distribution (distribution_type='u') "
+                "uses a (min, max) parameterisation, requiring min <= max."
             )
     elif distribution_type == "mvn":
         # Multivariate Normal distribution with
         #   (mean, covariance, indices) parameterization.
         if len(distribution_args) != 2:
             raise ValueError(
-                "multivariate normal requires two parameters "
-                "in distribution_args: "
+                "Multivariate normal distribution (distribution_type='mvn') "
+                "uses a (mean, cov) parameterisation, requiring "
                 "a mean vector and a covariance matrix."
             )
         if not isinstance(distribution_args[0], np.ndarray):
@@ -332,20 +342,23 @@ def _check_distribution(distribution_type, distribution_args, dim):
         raise ValueError(f"{distribution_type} is not a supported distribution type.")
 
 
+# TODO: Remove "This design closely mirrors :class: MutationType." below?
+#       Or is that sentence reference to SLiM's MutationType class? If yes,
+#       make that clear.
 @attr.s(kw_only=True)
 class MutationType(object):
     """
     Class representing a "type" of mutation, allowing the mutation to affect
-    fitness and/or trait(s). This design closely mirrors :class: MutationType.
+    trait(s) and/or fitness. This design closely mirrors :class: MutationType.
 
-    The main thing that mutation types carry is a way of drawing a selection
-    coefficient for each new mutation. This ``distribution_type`` should be one
-    of (see the SLiM manual for more information on these):
+    The main thing that mutation types carry is a way of drawing an effect
+    for each new mutation from a distribution. This ``distribution_type`` should
+    be one of (see the SLiM manual for more information on these):
 
-    - ``f``: fixed, one parameter (the selection coefficient)
+    - ``f``: fixed, one parameter (an intercept)
     - ``e``: exponential, one parameter (mean)
     - ``g``: gamma, two parameters (mean, shape)
-    - ``n``: normal, two parameters (mean, SD)
+    - ``n``: normal, two parameters (mean, sd)
     - ``w``: Weibull, two parameters (scale, shape)
     - ``u``: Uniform, two parameters (min, max)
     - ``lp``: positive logNormal, two parameters (mean and sd on log scale; see rlnorm)
@@ -357,6 +370,7 @@ class MutationType(object):
     exponential and gamma, a negative mean can be provided, obtaining always
     negative values.
 
+    TODO: Revise the below paragraph to cover traits and fitness more generally.
     Instead of a single dominance coefficient (which would be specified with
     `dominance_coeff`), a discretized relationship between dominance and
     selection coefficient can be implemented: if dominance_coeff_list is
@@ -370,11 +384,10 @@ class MutationType(object):
     forth. The list of breaks must therefore be of length one less than the
     list of dominance coefficients.
 
-
     TODO: is "dominance_coeff_list" still the way we want to do things?
     SLiM is more flexible in this now.
 
-    :ivar trait_ids: A list of IDs of traits this mutation type affects.
+    :ivar trait_ids: A list of trait IDs this mutation type affects.
     :vartype trait_ids: list
     :ivar distribution_type: A str abbreviation for the distribution of
         effects that each new mutation of this type draws from (see above).
@@ -554,21 +567,21 @@ class DistributionOfMutationEffects(object):
     and ``proportions`` should be nonnegative numbers summing to 1.
 
     :ivar ~.mutation_types: A list of :class:`.MutationType`
-        objects associated with the DFE. Defaults to an empty list.
+        objects associated with the DME. Defaults to an empty list.
     :vartype ~.mutation_types: list
     :ivar ~.proportions: A list of the proportions of new mutations that
         fall in to each of the mutation types (must sum to 1).
     :vartype ~.proportions: list
-    :ivar ~.id: The unique identifier for this model. DFE IDs should be
+    :ivar ~.id: The unique identifier for this model. DME IDs should be
         short and memorable, and conform to the stdpopsim
         :ref:`naming conventions <sec_development_naming_conventions>`
-        for DFE models.
+        for DME models.
     :vartype ~.id: str
     :ivar ~.description: A short description of this model as it would be used in
-        written text, e.g., "Lognormal DFE". This should
-        describe the DFE itself and not contain author or year information.
+        written text, e.g., "Lognormal DME". This should
+        describe the DME itself and not contain author or year information.
     :vartype ~.description: str
-    :ivar long_description: A concise, but detailed, summary of the DFE model.
+    :ivar long_description: A concise, but detailed, summary of the DME model.
     :vartype long_description: str
     """
 
