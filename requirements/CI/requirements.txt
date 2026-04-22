@@ -18,4 +18,4 @@ pandas>=1.1
 numpy>=1.19
 cython>=0.29
 scikit-allel[full]>=1.2.1
-zarr>=2.4
+zarr>=3.1.6
