@@ -1,3 +1,108 @@
 [build-system]
-# We need setup.cfg support, which setuptools introduced in 30.3.0.
-requires = ["setuptools>=30.3.0", "wheel", "setuptools_scm"]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stdpopsim"
+dynamic = ["version"]
+description = "A library of population genetic simulation models"
+readme = "README.md"
+authors = [
+    {name = "PopSim Consortium", email = "popgen_benchmark@lists.uoregon.edu"},
+]
+license = {text = "GNU GPLv3+"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+keywords = ["population genetics", "simulation", "selection", "recombination map", "tree sequences"]
+requires-python = ">=3.11"
+dependencies = [
+    "msprime>=1.4.4",
+    "attrs>=19.1.0",
+    "appdirs",
+    "humanize",
+    "pyslim>=1.1.1",
+    "numpy",
+]
+
+[project.urls]
+homepage = "https://popsim-consortium.github.io/stdpopsim-docs/stable/index.html"
+repository = "https://github.com/popsim-consortium/stdpopsim"
+"Bug Reports" = "https://github.com/popsim-consortium/stdpopsim/issues"
+
+[project.scripts]
+stdpopsim = "stdpopsim.cli:stdpopsim_main"
+
+[tool.setuptools]
+packages = ["stdpopsim"]
+include-package-data = true
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+
+[dependency-groups]
+test = [
+    "coverage",
+    "daiquiri",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "setuptools_scm",
+    "msprime>=1.1.0",
+    "attrs",
+    "appdirs",
+    "humanize",
+    "pre-commit",
+    "scikit-allel",
+    "biopython",
+    "demes==0.2.3",
+    "demesdraw==0.4.0",
+    "boto3",
+    "kastore",
+    "scipy",
+]
+
+docs = [
+    "sphinx",
+    "sphinx-argparse",
+    "sphinx-issues",
+    "sphinx_rtd_theme",
+    "sphinxcontrib-programoutput",
+]
+
+lint = [
+    "black>=22.1.0",
+    "blacken-docs",
+    "flake8",
+]
+
+packaging = [
+    "twine",
+    "validate-pyproject[all]",
+]
+
+dev = [
+    {include-group = "docs"},
+    {include-group = "lint"},
+    {include-group = "test"},
+    {include-group = "packaging"},
+]
+
+[flake8]
+max-line-length = 89
+extend-ignore = ["E203", "W503"]
+
+[tool.pytest]
+addopts = ["-n 4",]
+testpaths = ["tests",]

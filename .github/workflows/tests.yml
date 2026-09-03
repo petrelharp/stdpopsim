@@ -18,7 +18,6 @@ jobs:
         os: [ubuntu-24.04, macos-latest, windows-latest]
         python: ["3.11", "3.13"]
     env:
-      CONDA_ENV_NAME: stdpopsim
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python }}
     steps:
@@ -30,40 +29,21 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4.2.2
 
-      - name: Cache conda and dependencies
-        id: cache
-        uses: actions/cache@v4.2.0
-        env:
-          # Increase this to reset the cache if the key hasn't changed.
-          CACHE_NUM: 1
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
         with:
-          path: ${{ env.CONDA }}/envs
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-${{ env.CACHE_NUM }}-${{ hashFiles('requirements/CI/*') }}
-
-      - name: Install Conda
-        uses: mamba-org/setup-micromamba@v3
-        with:
-          environment-name: anaconda-client-env
-          init-shell: bash
-          create-args: |
-            python=${{ matrix.python }}
+          python-version: ${{ matrix.python }}
+          version: "0.10.0"
 
       - name: Fix windows .profile
         if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows-latest'
         run: |
           cp ~/.bash_profile ~/.profile
 
-      - name: Install conda deps
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash -l {0} #We need a login shell to get conda
-        run: |
-          micromamba install --yes --file=requirements/CI/conda.txt
-
-      - name: Install pip deps
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash -l {0}
-        run: |
-            pip install -r requirements/CI/requirements.txt
+      - name: Install test deps
+        env:
+          PYPROJECT_DIRECTORY: ${{ inputs.pyproject-directory }}
+        run: uv sync --project=${PYPROJECT_DIRECTORY} --locked --group test --no-default-groups
 
       - name: Install development SLiM
       # This should be COMMENTED OUT for release versions,
@@ -82,9 +62,9 @@ jobs:
       - name: run test suite
         shell: bash -l {0}
         run: |
-          micromamba activate anaconda-client-env
           export PATH=$PWD/SLiM/Release:$PATH
           slim -v
+          uv run --project=. --locked --group test --no-default-groups \
           python -m pytest \
             -n 0 \
             -v \
@@ -99,7 +79,6 @@ jobs:
         with:
           fail_ci_if_error: true
           env_vars: OS,PYTHON
-          # Use upload token to avoid upload failures.
-          # https://github.com/codecov/codecov-action/issues/837
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
           verbose: true

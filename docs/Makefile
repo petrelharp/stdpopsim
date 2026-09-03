@@ -3,7 +3,7 @@
 
 # You can set these variables from the command line.
 SPHINXOPTS    = -W
-SPHINXBUILD   = sphinx-build
+SPHINXBUILD   = uv run --project=.. --group docs sphinx-build
 SOURCEDIR     = .
 BUILDDIR      = _build
 
